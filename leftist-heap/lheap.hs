@@ -20,12 +20,14 @@ module LHeap
 
 import Test.QuickCheck
 import qualified Data.Map as M
-import qualified Data.List as L
+import qualified Data.List as L hiding (foldl, foldr)
 import Data.Traversable
-import Data.Foldable hiding (and, all, elem, concatMap)
+import Data.Foldable hiding (and, all, elem, foldl, foldr, concatMap)
 import Data.Monoid
 import Data.Tuple
 import Data.Maybe
+
+import HLib hiding (merge)
 
 import qualified Data.Text.Lazy as Ly
 import qualified Data.ByteString.Char8 as ByteString
@@ -35,26 +37,28 @@ data LHeap a = Empty | Node Integer a (LHeap a) (LHeap a)
 instance (Show a) => Show (LHeap a) where
 	show :: LHeap a -> String
 	show Empty = "An empty leftist heap."
-	show h = "LeftistHeap [" ++ (show' h) ++ "]"
-		where
-			show' :: LHeap a -> String
-			show' Empty = ""
-			show' h@(Node _ e l r) =
-				(show' l) ++
-				(show  e) ++ ", " ++
-				(show' r)
+	show h = "LeftistHeap " ++ (show $ foldMap (\a -> [a]) h)
 
 instance Functor LHeap where
-  fmap f Empty        = Empty
+  fmap f Empty = Empty
   fmap f (Node n e l r) = Node n (f e) (fmap f l) (fmap f r)
 
 instance Foldable LHeap where
 	foldMap :: (Monoid m) => (a -> m) -> LHeap a -> m
-	foldMap f Empty = mempty
-	foldMap f lheap@(Node _ e l r) =
-		(foldMap f l)
-		`mappend` f e
-		`mappend` (foldMap f r)
+	foldMap f = zoldMap (f . value)
+
+instance Zoldable LHeap where
+	zoldMap :: (Monoid m) => (LHeap a -> m) -> LHeap a -> m
+	zoldMap f Empty = mempty
+	zoldMap f node@(Node _ e l r) =
+		(f node) `mappend` (mconcat . map (zoldMap f) $ [l, r])
+
+instance (Ord a) => Monoid (LHeap a) where
+	mempty :: LHeap a
+	mempty = Empty
+
+	mappend :: LHeap a -> LHeap a -> LHeap a
+	mappend = merge
 
 instance (Eq a) => Eq (LHeap a) where
 	Empty == Empty = True
@@ -119,7 +123,7 @@ flatten Empty = []
 flatten node@(Node _ _ l r) = (flatten l) ++ [node] ++ (flatten r)
 
 fromList :: (Ord a) => [a] -> LHeap a
-fromList = L.foldl insert empty . L.nub
+fromList = L.foldl' insert empty . L.nub
 
 empty :: LHeap a
 empty = Empty
@@ -180,6 +184,7 @@ test_lheap elems = and
 	, no_other_elems_present
 	, has_heap_property lheap
 	, has_leftist_property lheap
+	, dequeue_min_works lheap
 	]
 	where
 		all_elems_present :: Bool
@@ -190,18 +195,27 @@ test_lheap elems = and
 
 		has_heap_property :: (Ord a) => LHeap a -> Bool
 		has_heap_property Empty = True
-		has_heap_property h@(Node _ e l r) =
-			(is_empty l || e < value l) &&
-			(is_empty r || e < value r) &&
-			has_heap_property l &&
-			has_heap_property r
+		has_heap_property h@(Node _ e l r) = and
+			[ is_empty l || e < value l
+			, is_empty r || e < value r
+			, has_heap_property l
+			, has_heap_property r ]
 
 		has_leftist_property :: LHeap a -> Bool
 		has_leftist_property Empty = True
-		has_leftist_property h@(Node _ _ l r) =
-			(rank l >= rank r) &&
-			has_leftist_property l &&
-			has_leftist_property r
+		has_leftist_property h@(Node _ _ l r) = and
+			[ rank l >= rank r
+			, has_leftist_property l
+			, has_leftist_property r ]
+
+		dequeue_min_works :: (Ord a) => LHeap a -> Bool
+		dequeue_min_works h =
+			is_sorted
+			. safe_tail 
+			. map fst
+			. takeWhile (not . is_empty . snd)
+			. iterate (dequeue_min . snd)
+			$ (undefined, h)
 
 		lheap :: LHeap Integer
 		lheap = fromList elems

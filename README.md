@@ -3,6 +3,13 @@ functional-data-structures
 
 Data structure implementations in functional languages (predominantly Haskell), following *Purely Functional Data Structures*, by Chris Okasaki.
 
+Dependencies
+------------
+
+- [Haskell](http://www.haskell.org/haskellwiki/Haskell)
+- [GraphViz](http://graphviz.org/) (`brew install graphviz`)
+- [Haskell GraphViz](https://hackage.haskell.org/package/graphviz) (`cabal install graphviz`)
+- [HLib](https://github.com/bgwines/hlib)
 
 Leftist heaps
 ------------

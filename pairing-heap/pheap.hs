@@ -13,20 +13,22 @@ module PHeap
 , export_for_graphing
 ) where
 
-{- A heap with the property that the rank of the left child of
-   any node is greater than or equal to the rank of the right
-   child, where the rank of the node is the minimum of the lengths
-   of all its root-null paths. -}
+{- A heap-ordered multiway tree. It is defined by its behavior during
+   the `dequeue_min` operation, which restructures the by merging
+   adjacent pairs of children and then folding along that list with
+   the merging operation. -}
 
 import Test.QuickCheck
 import qualified Data.Ord as O
 import qualified Data.Map as M
-import qualified Data.List as L hiding (foldl)
+import qualified Data.List as L
 import Data.Traversable
-import Data.Foldable hiding (and, all, or, elem, foldl, concatMap)
+import Data.Foldable hiding (and, all, or, elem, concatMap)
 import Data.Monoid
 import Data.Tuple
 import Data.Maybe
+
+import HLib hiding (merge)
 
 import Control.Applicative hiding (empty)
 
@@ -44,14 +46,9 @@ instance Functor PHeap where
   fmap f Empty        = Empty
   fmap f (Node e children) = Node (f e) (map (fmap f) children)
 
-class Zoldable z where
-	zoldMap :: (Monoid m) => (z a -> m) -> z a -> m
-
 instance Foldable PHeap where
 	foldMap :: (Monoid m) => (a -> m) -> PHeap a -> m
-	foldMap f Empty = mempty
-	foldMap f pheap@(Node e children) =
-		(f e) `mappend` (mconcat . map (foldMap f) $ children)
+	foldMap f = zoldMap (f . value)
 
 instance Zoldable PHeap where
 	zoldMap :: (Monoid m) => (PHeap a -> m) -> PHeap a -> m
@@ -113,7 +110,7 @@ export_for_graphing pheap@(Node e children) = (nodes, edges)
 				m = M.fromList $ map swap nodes
 
 fromList :: (Ord a) => [a] -> PHeap a
-fromList = foldl insert empty . L.nub
+fromList = L.foldl' insert empty . L.nub
 
 empty :: PHeap a
 empty = Empty
@@ -143,22 +140,11 @@ merge_pairs pheaps
 			merge (merge h1 h2) (merge_pairs pheaps')
 
 insert :: (Ord a) => PHeap a -> a -> PHeap a
-insert pheap e = merge pheap (Node e [])
+insert pheap e = merge (Node e []) pheap
 
 dequeue_min :: forall a. (Ord a) => PHeap a -> (a, PHeap a)
 dequeue_min Empty = error "Empty heap"
-dequeue_min (Node e children) = (e, pheap')
-	where
-		pheap' :: PHeap a
-		pheap' = if children == []
-			then Empty
-			else Node (value min_child) children'
-
-		children' :: [PHeap a]
-		children' = (L.delete min_child children) ++ (get_children min_child)
-
-		min_child :: PHeap a
-		min_child = L.minimumBy (O.comparing value) $ children
+dequeue_min (Node e children) = (e, merge_pairs children)
 
 find_min :: PHeap a -> a
 find_min Empty = error "Empty heap"
@@ -179,13 +165,6 @@ contains h@(Node e children) e' =
 		LT -> False
 		EQ -> True
 		GT -> or . map (flip contains $ e') $ children
-
-is_sorted :: (Ord a) => [a] -> Bool
-is_sorted l = and $ zipWith (<=) l (tail l)
-
-safe_tail :: [a] -> [a]
-safe_tail [] = []
-safe_tail l = tail l
 
 runtests :: IO ()
 runtests = quickCheckWith stdArgs { maxSuccess = 3000 } test_pheap
