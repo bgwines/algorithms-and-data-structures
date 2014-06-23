@@ -12,13 +12,13 @@ import Data.Word
 
 import System.IO
 
-
+import SHeap
 
 make_graph :: String -> Gr Text Text
 make_graph str = mkGraph v e
 	where
-		(v, e) = export_for_graphing . fromList $ str'
-		str' = read str :: [Integer]
+		(v, e) = export_for_graphing . snd . (\h -> contains h 'e') . snd . (\h -> contains h 'g') . fromList $ str'
+		str' = read str :: [String]
 
 example_graph :: Gr Text Text
 example_graph = mkGraph
