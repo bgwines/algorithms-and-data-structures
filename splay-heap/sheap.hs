@@ -20,8 +20,9 @@ module SHeap
 , contains
 ) where
 
-{- A heap-ordered self-balancing BST that re-structures itself to allow 
-   more frequently accessed elements to be faster to access. -}
+{- A heap-ordered self-balancing BST that re-structures itself through 
+   smarter-than-naïve tree rotations to allow more frequently accessed 
+   elements to be faster to access. -}
 
 import Test.QuickCheck
 import qualified Data.Ord as O
