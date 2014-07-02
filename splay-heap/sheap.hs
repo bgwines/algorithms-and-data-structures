@@ -2,8 +2,7 @@
 {-# LANGUAGE InstanceSigs #-}
 
 module SHeap
-( export_for_graphing
-, fromList
+( fromList
 , empty
 , is_empty
 , elems
@@ -18,6 +17,7 @@ module SHeap
 , dequeue_min
 , insert
 , contains
+, G.graph
 ) where
 
 {- A heap-ordered self-balancing BST that re-structures itself through 
@@ -34,7 +34,9 @@ import Data.Monoid
 import Data.Tuple
 import Data.Maybe
 
-import HLib hiding (merge)
+import Zora.List hiding (merge)
+import Zora.Types
+import qualified Zora.TreeGraphing as G
 
 import Control.Applicative hiding (empty, (<*))
 
@@ -56,12 +58,6 @@ instance Functor SHeap where
 instance Foldable SHeap where
 	foldMap :: (Monoid m) => (a -> m) -> SHeap a -> m
 	foldMap f = zoldMap (f . value)
-
-instance Zoldable SHeap where
-	zoldMap :: (Monoid m) => (SHeap a -> m) -> SHeap a -> m
-	zoldMap f Empty = mempty
-	zoldMap f node@(Node l e r) =
-		(f node) `mappend` (mconcat . map (zoldMap f) $ [l, r])
 
 instance (Ord a) => Monoid (SHeap a) where
 	mempty :: SHeap a
@@ -85,43 +81,23 @@ instance (Ord a) => Ord (SHeap a) where
 	Empty `compare` _     = LT
 	(Node _ e _) `compare` (Node _ e' _) = e `compare` e'
 
-type Graph = ([Node], [Edge])
-type Node = (Int, Ly.Text)
-type Edge = (Int, Int, Ly.Text)
-type Label = Int
 
-export_for_graphing :: forall a. (Show a, Ord a) => SHeap a -> Graph
-export_for_graphing Empty = ([], [])
-export_for_graphing sheap@(Node l e r) = (nodes, edges)
-	where
-		nodes :: [Node]
-		nodes = zip [0..] $ map show' sheap_nodes
+instance Zoldable SHeap where
+	zoldMap :: (Monoid m) => (SHeap a -> m) -> SHeap a -> m
+	zoldMap = G.zoldMap
 
-		show' :: SHeap a -> Ly.Text
-		show' = Ly.pack . show  . value
+instance G.TreeGraphable SHeap where
+	value :: SHeap a -> a
+	value Empty = error "Empty nodes have no get_value"
+	value (Node _ e _) = e
 
-		sheap_nodes :: [SHeap a]
-		sheap_nodes = zoldMap (\a -> [a]) sheap
+	get_children :: SHeap a -> [SHeap a]
+	get_children Empty = []
+	get_children (Node l _ r) = [l, r]
 
-		edges :: [Edge]
-		edges = concatMap edgeify sheap_nodes
-
-		edgeify :: SHeap a -> [Edge]
-		edgeify node@(Node l e r) =
-			map fromJust
-			. filter (not . isNothing)
-			. map maybe_edge $ [l, r]
-			where 
-				maybe_edge :: SHeap a -> Maybe Edge
-				maybe_edge child = if child == Empty
-					then Nothing
-					else Just
-						( m M.! (show' node)
-						, m M.! (show' child)
-						, Ly.empty )
-
-				m :: M.Map Ly.Text Label
-				m = M.fromList $ map swap nodes
+	is_empty :: SHeap a -> Bool
+	is_empty Empty = True
+	is_empty _ = False
 
 fromList :: (Ord a) => [a] -> SHeap a
 fromList = L.foldl' insert empty
@@ -332,7 +308,7 @@ test_sheap elements = and
 		dequeue_min_works :: (Ord a) => SHeap a -> Bool
 		dequeue_min_works h =
 			is_sorted
-			. safe_tail 
+			. (\l -> if l == [] then [] else tail l) 
 			. map fst
 			. takeWhile (not . is_empty . fst)
 			. iterate (dequeue_min . fst)

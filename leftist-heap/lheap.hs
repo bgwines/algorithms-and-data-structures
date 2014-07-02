@@ -8,9 +8,9 @@ module LHeap
 , find_min
 , dequeue_min
 , merge
-, is_empty
+, heap_is_empty
 , fromList
-, export_for_graphing
+, G.graph
 ) where
 
 {- A heap with the property that the rank of the left child of
@@ -27,7 +27,9 @@ import Data.Monoid
 import Data.Tuple
 import Data.Maybe
 
-import HLib hiding (merge)
+import Zora.List hiding (merge)
+import qualified Zora.TreeGraphing as G
+import Zora.Types
 
 import qualified Data.Text.Lazy as Ly
 import qualified Data.ByteString.Char8 as ByteString
@@ -45,13 +47,7 @@ instance Functor LHeap where
 
 instance Foldable LHeap where
 	foldMap :: (Monoid m) => (a -> m) -> LHeap a -> m
-	foldMap f = zoldMap (f . value)
-
-instance Zoldable LHeap where
-	zoldMap :: (Monoid m) => (LHeap a -> m) -> LHeap a -> m
-	zoldMap f Empty = mempty
-	zoldMap f node@(Node _ e l r) =
-		(f node) `mappend` (mconcat . map (zoldMap f) $ [l, r])
+	foldMap f = zoldMap (f . get_value)
 
 instance (Ord a) => Monoid (LHeap a) where
 	mempty :: LHeap a
@@ -75,10 +71,22 @@ instance (Ord a) => Ord (LHeap a) where
 	Empty `compare` b     = LT
 	(Node _ e _ _) `compare` (Node _ e' _ _) = e `compare` e'
 
-type Graph = ([Node], [Edge])
-type Node = (Int, Ly.Text)
-type Edge = (Int, Int, Ly.Text)
-type Label = Int
+instance Zoldable LHeap where
+	zoldMap :: (Monoid m) => (LHeap a -> m) -> LHeap a -> m
+	zoldMap = G.zoldMap
+
+instance G.TreeGraphable LHeap where
+	value :: LHeap a -> a
+	value Empty = error "Empty nodes have no get_value"
+	value (Node _ e _ _) = e
+
+	get_children :: LHeap a -> [LHeap a]
+	get_children Empty = []
+	get_children (Node _ _ l r) = [l, r]
+
+	is_empty :: LHeap a -> Bool
+	is_empty Empty = True
+	is_empty _ = False
 
 pair :: a -> b -> (a, b)
 pair a b = (a, b)
@@ -89,48 +97,15 @@ pairAppend (a, b) c = (a, b, c)
 pairMap :: (a -> b) -> (a, a) -> (b, b)
 pairMap f (a, a') = (f a, f a')
 
-export_for_graphing :: forall a. (Show a, Ord a) => LHeap a -> Graph
-export_for_graphing Empty = ([], [])
-export_for_graphing lheap@(Node n e l r) = (nodes, edges)
-	where
-		-- overloaded meaning of "node"; don't get confused ;)
-		nodes :: [Node]
-		nodes = zip [0..] $ foldMap (\e -> [Ly.pack . show $ e]) lheap 
-
-		edges :: [Edge]
-		edges = concatMap edgeify . flatten $ lheap
-
-		edgeify :: LHeap a -> [Edge]
-		edgeify node@(Node _ e l r) =
-			map fromJust . filter (not . isNothing) $ [l', r']
-			where 
-				l' :: Maybe Edge
-				l' = if l == Empty
-					then Nothing
-					else Just (m M.! node, m M.! l, Ly.empty)
-				
-				r' :: Maybe Edge
-				r' = if r == Empty
-					then Nothing
-					else Just (m M.! node, m M.! r, Ly.empty)
-
-				-- flatten is in same order (infix) as foldMap
-				m :: M.Map (LHeap a) Label
-				m = M.fromList $ zip (flatten lheap) [0..]
-
-flatten :: LHeap a -> [LHeap a]
-flatten Empty = []
-flatten node@(Node _ _ l r) = (flatten l) ++ [node] ++ (flatten r)
-
 fromList :: (Ord a) => [a] -> LHeap a
 fromList = L.foldl' insert empty . L.nub
 
 empty :: LHeap a
 empty = Empty
 
-is_empty :: LHeap a -> Bool
-is_empty Empty = True
-is_empty _ = False
+heap_is_empty :: LHeap a -> Bool
+heap_is_empty Empty = True
+heap_is_empty _ = False
 
 insert :: (Ord a) => LHeap a -> a -> LHeap a
 insert lheap e = merge lheap (Node 0 e Empty Empty)
@@ -147,9 +122,9 @@ rank :: LHeap a -> Integer
 rank Empty = 0
 rank (Node n _ _ _) = n
 
-value :: LHeap a -> a
-value Empty = error "Empty nodes have no value"
-value (Node _ e _ _) = e
+get_value :: LHeap a -> a
+get_value Empty = error "Empty nodes have no get_value"
+get_value (Node _ e _ _) = e
 
 merge :: forall a . (Ord a) => LHeap a -> LHeap a -> LHeap a
 merge Empty lheap = lheap
@@ -196,8 +171,8 @@ test_lheap elems = and
 		has_heap_property :: (Ord a) => LHeap a -> Bool
 		has_heap_property Empty = True
 		has_heap_property h@(Node _ e l r) = and
-			[ is_empty l || e < value l
-			, is_empty r || e < value r
+			[ heap_is_empty l || e < get_value l
+			, heap_is_empty r || e < get_value r
 			, has_heap_property l
 			, has_heap_property r ]
 
@@ -211,9 +186,9 @@ test_lheap elems = and
 		dequeue_min_works :: (Ord a) => LHeap a -> Bool
 		dequeue_min_works h =
 			is_sorted
-			. safe_tail 
+			. (\l -> if l == [] then [] else tail l) 
 			. map fst
-			. takeWhile (not . is_empty . snd)
+			. takeWhile (not . heap_is_empty . snd)
 			. iterate (dequeue_min . snd)
 			$ (undefined, h)
 

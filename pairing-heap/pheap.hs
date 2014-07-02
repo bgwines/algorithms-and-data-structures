@@ -10,7 +10,7 @@ module PHeap
 , merge
 , is_empty
 , fromList
-, export_for_graphing
+, G.graph
 ) where
 
 {- A heap-ordered multiway tree. It is defined by its behavior during
@@ -28,7 +28,9 @@ import Data.Monoid
 import Data.Tuple
 import Data.Maybe
 
-import HLib hiding (merge)
+import Zora.List hiding (merge)
+import Zora.Types
+import qualified Zora.TreeGraphing as G
 
 import Control.Applicative hiding (empty)
 
@@ -50,12 +52,6 @@ instance Foldable PHeap where
 	foldMap :: (Monoid m) => (a -> m) -> PHeap a -> m
 	foldMap f = zoldMap (f . value)
 
-instance Zoldable PHeap where
-	zoldMap :: (Monoid m) => (PHeap a -> m) -> PHeap a -> m
-	zoldMap f Empty = mempty
-	zoldMap f node@(Node e children) =
-		(f node) `mappend` (mconcat . map (zoldMap f) $ children)
-
 instance (Ord a) => Monoid (PHeap a) where
 	mempty :: PHeap a
 	mempty = Empty
@@ -71,43 +67,22 @@ instance (Eq a) => Eq (PHeap a) where
 		(e == e') &&
 		(and $ zipWith (==) children children')
 
-type Graph = ([Node], [Edge])
-type Node = (Int, Ly.Text)
-type Edge = (Int, Int, Ly.Text)
-type Label = Int
+instance Zoldable PHeap where
+	zoldMap :: (Monoid m) => (PHeap a -> m) -> PHeap a -> m
+	zoldMap = G.zoldMap
 
-export_for_graphing :: forall a. (Show a, Ord a) => PHeap a -> Graph
-export_for_graphing Empty = ([], [])
-export_for_graphing pheap@(Node e children) = (nodes, edges)
-	where
-		nodes :: [Node]
-		nodes = zip [0..] $ map show' pheap_nodes
+instance G.TreeGraphable PHeap where
+	value :: PHeap a -> a
+	value Empty = error "Empty nodes have no get_value"
+	value (Node e _) = e
 
-		show' :: PHeap a -> Ly.Text
-		show' = Ly.pack . show  . value
+	get_children :: PHeap a -> [PHeap a]
+	get_children Empty = []
+	get_children (Node _ children) = children
 
-		pheap_nodes :: [PHeap a]
-		pheap_nodes = zoldMap (\a -> [a]) pheap
-
-		edges :: [Edge]
-		edges = concatMap edgeify pheap_nodes
-
-		edgeify :: PHeap a -> [Edge]
-		edgeify node@(Node e children) =
-			map fromJust
-			. filter (not . isNothing)
-			. map maybe_edge $ children
-			where 
-				maybe_edge :: PHeap a -> Maybe Edge
-				maybe_edge child = if child == Empty
-					then Nothing
-					else Just
-						( m M.! (show' node)
-						, m M.! (show' child)
-						, Ly.empty )
-
-				m :: M.Map Ly.Text Label
-				m = M.fromList $ map swap nodes
+	is_empty :: PHeap a -> Bool
+	is_empty Empty = True
+	is_empty _ = False
 
 fromList :: (Ord a) => [a] -> PHeap a
 fromList = L.foldl' insert empty . L.nub
@@ -191,7 +166,7 @@ test_pheap elems = and
 		dequeue_min_works :: (Ord a) => PHeap a -> Bool
 		dequeue_min_works h =
 			is_sorted
-			. safe_tail 
+			. (\l -> if l == [] then [] else tail l)
 			. map fst
 			. takeWhile (not . is_empty . snd)
 			. iterate (dequeue_min . snd)

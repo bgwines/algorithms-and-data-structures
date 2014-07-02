@@ -9,7 +9,7 @@ Dependencies
 - [Haskell](http://www.haskell.org/haskellwiki/Haskell)
 - [GraphViz](http://graphviz.org/) (`brew install graphviz`)
 - [Haskell GraphViz](https://hackage.haskell.org/package/graphviz) (`cabal install graphviz`)
-- [HLib](https://github.com/bgwines/hlib)
+- [Zora](https://hackage.haskell.org/package/Zora-1.1.9) (`cabal install zora`)
 
 Leftist heaps
 ------------
@@ -29,7 +29,7 @@ A random-access list is a data structure that supports most list operations (e.g
 
 This implemented usines a sparse representation of skew binary numbers. It is a numerical representation backed by a list of complete binary trees.
 
-The skew binary number system is a positional number system where the weights are not `2^i`, as in traditional binary, but rather `2^(i+1) - 1`. Digits are allowed to be `0`, `1`, or `2`, with the restriction that only the least significant nonzero digit is allowed to be `2`. With this restriction, every natural number has a unique representation under this system [Mye83]; otherwise, the system is redundant.
+The skew binary number system is a positional number system where the weights are not `2^i`, as in traditional binary, but rather `2^(i+1) - 1`. Digits are allowed to be `0`, `1`, or `2`, with the restriction that only the least significant nonzero digit is allowed to be `2`. With this restriction, every natural number has a unique representation under this system [Mye83]; otherwise, the system is oredundant.
 
 We represent the digit `2` at position `i` in our sparse representation as the concatenation of two trees of order `w_i`.
 
