@@ -7,6 +7,7 @@ module RList
 , RList.cons
 , RList.head
 , RList.tail
+, RList.graph
 , fromList
 , (!)
 , at
@@ -15,7 +16,7 @@ module RList
 , is_empty
 , aslist
 , size
-, export_for_graphing
+, elems
 ) where
 
 {- A random-access list is a data structure that supports most list
@@ -52,7 +53,8 @@ import Data.Monoid
 import Data.Tuple
 import Data.Maybe
 
-import HLib hiding (cons)
+import Zora.List hiding (cons)
+import Zora.Graphing.DAGGraphing as G
 
 import Control.Applicative hiding (empty)
 
@@ -64,16 +66,11 @@ data Tree a
 	| Node a (Tree a) (Tree a)
 	| Meganode a [Tree a] deriving Show
 
-data RList a = RList [(Integer, Tree a)] deriving Show
+data RList a = RList [(Integer, Tree a)]
 
-{-instance (Show a) => Show (RList a) where
+instance (Show a) => Show (RList a) where
 	show :: RList a -> String
-	show Empty = "An empty pairing heap."
-	show h = "Heap " ++ (show $ elems h)
--}
-
--- instance Functor (Integer, Tree a) where
--- 	fmap f (n, t) = (n, fmap f t)
+	show rlist = "RList " ++ (show $ elems rlist)
 
 instance Functor Tree where
 	fmap f (Leaf e) = Leaf (f e)
@@ -81,23 +78,21 @@ instance Functor Tree where
 
 instance Foldable Tree where
 	foldMap :: (Monoid m) => (a -> m) -> Tree a -> m
-	foldMap f = zoldMap (f . value)
+	foldMap f (Node e l r) = (f e) `mappend` (mconcat . map (foldMap f) $ [l, r])
 
-instance Zoldable Tree where
-	zoldMap :: (Monoid m) => (Tree a -> m) -> Tree a -> m
-	zoldMap f node@(Leaf a) = f node
-	zoldMap f node@(Node e l r)
-		= (f node) `mappend` (mconcat . map (zoldMap f) $ [l, r])
-	zoldMap f node@(Meganode e children)
-		= (f node) `mappend` (mconcat . map (zoldMap f) $ children)
 instance (Eq a) => Eq (Tree a) where
 	(Leaf e)     == (Leaf e')    = (e == e')
-	(Node _ _ _) == (Leaf _)     = False
-	(Leaf _)     == (Node _ _ _) = False
 	(Node e l r) == (Node e' l' r') = and
 		[ e == e'
 		, l == l'
 		, r == r' ]
+	(Meganode e nodes) == (Meganode e' nodes') = and
+		[ e == e'
+		, nodes == nodes' ]
+
+	(Leaf _)       == _ = False
+	(Node _ _ _)   == _ = False
+	(Meganode _ _) == _ = False
 
 instance Functor RList where
 	fmap :: (a -> b) -> RList a -> RList b
@@ -109,16 +104,30 @@ instance Foldable RList where
 	foldMap :: (Monoid m) => (a -> m) -> RList a -> m
 	foldMap f = mconcat . map (foldMap f . snd) . list
 
--- this should compile, in theory...
---instance Zoldable RList where
---	zoldMap :: (Monoid m) => (RList a -> m) -> RList a -> m
---	zoldMap f = mconcat . map (zoldMap f . snd) . list
-
 instance (Eq a) => Eq (RList a) where
 	a == b = ((list a) == (list b))
 
 uid :: (Show a) => Tree a -> String
 uid = foldMap show
+
+instance (Show a) => G.DAGGraphable (Tree a) where
+	expand :: Tree a -> Maybe (Maybe String, [(Maybe String, Tree a)])
+	expand (Leaf e) = Just (Just (show e), [])
+	expand (Node e l r) = Just (Just (show e), [(Nothing, l), (Nothing, r)])
+	expand (Meganode _ nodes) = Just (Nothing, map (\x -> (Nothing, x)) nodes)
+
+elems :: RList a -> [a]
+elems (RList list) = concatMap (elems_tree . snd) list
+
+elems_tree :: Tree a -> [a]
+elems_tree (Leaf e) = [e]
+elems_tree (Node e l r) = e : ((elems_tree l) ++ (elems_tree r))
+
+graph :: forall a. (Show a, Eq a) => RList a -> IO String
+graph rlist = G.graph grand_tree
+	where
+		grand_tree :: Tree a
+		grand_tree = Meganode (RList.head rlist) (map snd . list $ rlist)
 
 value :: Tree a -> a
 value (Leaf e) = e
@@ -214,69 +223,3 @@ aslist rlist =
 
 size :: RList a -> Integer
 size = sum . map fst . list
-
-type Graph = ([Node], [Edge])
-type Node = (Int, Ly.Text)
-type Edge = (Int, Int, Ly.Text)
-type Label = Int
-
-export_for_graphing :: forall a. (Show a, Ord a) => RList a -> Graph
-export_for_graphing (RList []) = ([], [])
-export_for_graphing (RList rlist) = (nodes, edges)
-	where
-		grand_tree :: Tree a
-		grand_tree = Meganode e_dummy (map snd rlist)
-			where
-				e_dummy = RList.head (RList rlist)
-
-		all_tree_nodes :: [Tree a]
-		all_tree_nodes = zoldMap (\a -> [a]) grand_tree
-
-		all_tree_nodes_with_tree_ids :: [(Tree a, Integer)]
-		all_tree_nodes_with_tree_ids = zip all_tree_nodes tree_ids
-			where
-				tree_ids :: [Integer]
-				tree_ids = 0 : (concatMap (\(n, size) -> replicate (fromIntegral size) n) tree_ids')
-
-				tree_ids' :: [(Integer, Integer)]
-				tree_ids' = zip [1..] (map fst rlist)
-
-		nodes :: [Node]
-		nodes = filter used . zip [0..] . map show' $ all_tree_nodes
-			where
-				used :: Node -> Bool
-				used node = or . map (edge_uses node) $ edges
-
-				edge_uses :: Node -> Edge -> Bool
-				edge_uses (node, _) (u, v, _)
-					= (u == node) || (v == node) 
-
-		show' :: Tree a -> Ly.Text
-		show' (Meganode _ _) = Ly.empty
-		show' node = Ly.pack . show . value $ node
-
-		edges :: [Edge]
-		edges = concatMap edgeify all_tree_nodes_with_tree_ids
-
-		edgeify :: (Tree a, Integer) -> [Edge]
-		edgeify (node, tree_id) =
-			if tree_id == 0
-				then map edgify_node' . zip [1..] . children $ node
-				else map (edgify_node tree_id) . children $ node  -- children will have the same tree_id because they're in the same tree
-			where 
-				edgify_node' :: (Integer, Tree a) -> Edge
-				edgify_node' (child_tree_id, child) = edgify_node child_tree_id child
-
-				edgify_node :: Integer -> Tree a -> Edge
-				edgify_node child_tree_id child =
-					( m M.! (show_unique (node, tree_id))
-					, m M.! (show_unique (child, child_tree_id))
-					, Ly.empty )
-
-				m :: M.Map Ly.Text Label
-				m = M.fromList $ zip (map show_unique all_tree_nodes_with_tree_ids) [0..]
-
-				show_unique :: (Tree a, Integer) -> Ly.Text
-				show_unique (node, tree_id)
-					= Ly.pack ((uid node) ++ (show tree_id))
-

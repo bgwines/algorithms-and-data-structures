@@ -1,7 +1,7 @@
 functional-data-structures
 ==========================
 
-Data structure implementations in functional languages (predominantly Haskell), following *Purely Functional Data Structures*, by Chris Okasaki.
+Data structure implementations in functional languages (predominantly Haskell), mostly following *Purely Functional Data Structures*, by Chris Okasaki.
 
 Dependencies
 ------------
@@ -34,3 +34,11 @@ The skew binary number system is a positional number system where the weights ar
 We represent the digit `2` at position `i` in our sparse representation as the concatenation of two trees of order `w_i`.
 
 List operations (`cons`, `head`, and `tail`) run in constant time, whereas array operations (`set` and `at`) run in logarithmic time (more specifically, `min(i, log n)`, where `i` is the index in question).
+
+Trie
+----
+A trie is a tree that stores strings in a manner that overlaps all common prefixes.
+
+Transitive trie
+---------------
+A trie with transitive edges. Noncontiguous matching can be very slow in the worst case.

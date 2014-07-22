@@ -8,8 +8,9 @@ module LHeap
 , find_min
 , dequeue_min
 , merge
-, heap_is_empty
+, is_empty
 , fromList
+, elems
 , G.graph
 ) where
 
@@ -28,8 +29,7 @@ import Data.Tuple
 import Data.Maybe
 
 import Zora.List hiding (merge)
-import qualified Zora.TreeGraphing as G
-import Zora.Types
+import qualified Zora.Graphing.DAGGraphing as G
 
 import qualified Data.Text.Lazy as Ly
 import qualified Data.ByteString.Char8 as ByteString
@@ -39,7 +39,7 @@ data LHeap a = Empty | Node Integer a (LHeap a) (LHeap a)
 instance (Show a) => Show (LHeap a) where
 	show :: LHeap a -> String
 	show Empty = "An empty leftist heap."
-	show h = "LeftistHeap " ++ (show $ foldMap (\a -> [a]) h)
+	show h = "LeftistHeap " ++ (show . elems $ h)
 
 instance Functor LHeap where
   fmap f Empty = Empty
@@ -47,7 +47,9 @@ instance Functor LHeap where
 
 instance Foldable LHeap where
 	foldMap :: (Monoid m) => (a -> m) -> LHeap a -> m
-	foldMap f = zoldMap (f . get_value)
+	foldMap _ Empty = mempty
+	foldMap f (Node _ e l r) =
+		(f e) `mappend` (mconcat . map (foldMap f) $ [l, r])
 
 instance (Ord a) => Monoid (LHeap a) where
 	mempty :: LHeap a
@@ -65,28 +67,16 @@ instance (Eq a) => Eq (LHeap a) where
 		, l == l'
 		, r == r' ]
 
-instance (Ord a) => Ord (LHeap a) where
-	Empty `compare` Empty = EQ
-	a     `compare` Empty = GT
-	Empty `compare` b     = LT
-	(Node _ e _ _) `compare` (Node _ e' _ _) = e `compare` e'
+instance (Show a) => G.DAGGraphable (LHeap a) where
+	expand :: LHeap a -> Maybe (Maybe String, [(Maybe String, LHeap a)])
+	expand Empty = Nothing
+	expand (Node n e l r) = Just (label, [(Nothing, l), (Nothing, r)])
+		where
+			label :: Maybe String
+			label = Just ((show e) ++ " (" ++ (show n) ++ ")")
 
-instance Zoldable LHeap where
-	zoldMap :: (Monoid m) => (LHeap a -> m) -> LHeap a -> m
-	zoldMap = G.zoldMap
-
-instance G.TreeGraphable LHeap where
-	value :: LHeap a -> a
-	value Empty = error "Empty nodes have no get_value"
-	value (Node _ e _ _) = e
-
-	get_children :: LHeap a -> [LHeap a]
-	get_children Empty = []
-	get_children (Node _ _ l r) = [l, r]
-
-	is_empty :: LHeap a -> Bool
-	is_empty Empty = True
-	is_empty _ = False
+elems :: LHeap a -> [a]
+elems = foldMap (\a -> [a])
 
 pair :: a -> b -> (a, b)
 pair a b = (a, b)
@@ -103,9 +93,9 @@ fromList = L.foldl' insert empty . L.nub
 empty :: LHeap a
 empty = Empty
 
-heap_is_empty :: LHeap a -> Bool
-heap_is_empty Empty = True
-heap_is_empty _ = False
+is_empty :: LHeap a -> Bool
+is_empty Empty = True
+is_empty _ = False
 
 insert :: (Ord a) => LHeap a -> a -> LHeap a
 insert lheap e = merge lheap (Node 0 e Empty Empty)
@@ -171,8 +161,8 @@ test_lheap elems = and
 		has_heap_property :: (Ord a) => LHeap a -> Bool
 		has_heap_property Empty = True
 		has_heap_property h@(Node _ e l r) = and
-			[ heap_is_empty l || e < get_value l
-			, heap_is_empty r || e < get_value r
+			[ is_empty l || e < get_value l
+			, is_empty r || e < get_value r
 			, has_heap_property l
 			, has_heap_property r ]
 
@@ -188,7 +178,7 @@ test_lheap elems = and
 			is_sorted
 			. (\l -> if l == [] then [] else tail l) 
 			. map fst
-			. takeWhile (not . heap_is_empty . snd)
+			. takeWhile (not . is_empty . snd)
 			. iterate (dequeue_min . snd)
 			$ (undefined, h)
 

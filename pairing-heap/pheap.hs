@@ -10,6 +10,7 @@ module PHeap
 , merge
 , is_empty
 , fromList
+, elems
 , G.graph
 ) where
 
@@ -29,8 +30,7 @@ import Data.Tuple
 import Data.Maybe
 
 import Zora.List hiding (merge)
-import Zora.Types
-import qualified Zora.TreeGraphing as G
+import qualified Zora.Graphing.DAGGraphing as G
 
 import Control.Applicative hiding (empty)
 
@@ -50,7 +50,9 @@ instance Functor PHeap where
 
 instance Foldable PHeap where
 	foldMap :: (Monoid m) => (a -> m) -> PHeap a -> m
-	foldMap f = zoldMap (f . value)
+	foldMap f Empty = mempty
+	foldMap f (Node e children) =
+		(f e) `mappend` (mconcat . map (foldMap f) $ children)
 
 instance (Ord a) => Monoid (PHeap a) where
 	mempty :: PHeap a
@@ -67,25 +69,16 @@ instance (Eq a) => Eq (PHeap a) where
 		(e == e') &&
 		(and $ zipWith (==) children children')
 
-instance Zoldable PHeap where
-	zoldMap :: (Monoid m) => (PHeap a -> m) -> PHeap a -> m
-	zoldMap = G.zoldMap
+instance (Show a) => G.DAGGraphable (PHeap a) where
+	expand :: PHeap a -> Maybe (Maybe String, [(Maybe String, PHeap a)])
+	expand Empty = Nothing
+	expand (Node e children) = Just (Just (show e), map (\child -> (Nothing, child)) children)
 
-instance G.TreeGraphable PHeap where
-	value :: PHeap a -> a
-	value Empty = error "Empty nodes have no get_value"
-	value (Node e _) = e
-
-	get_children :: PHeap a -> [PHeap a]
-	get_children Empty = []
-	get_children (Node _ children) = children
-
-	is_empty :: PHeap a -> Bool
-	is_empty Empty = True
-	is_empty _ = False
+elems :: PHeap a -> [a]
+elems = foldMap (\a -> [a])
 
 fromList :: (Ord a) => [a] -> PHeap a
-fromList = L.foldl' insert empty . L.nub
+fromList = L.foldl' insert empty . uniqueify
 
 empty :: PHeap a
 empty = Empty

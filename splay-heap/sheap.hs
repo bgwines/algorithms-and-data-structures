@@ -35,8 +35,7 @@ import Data.Tuple
 import Data.Maybe
 
 import Zora.List hiding (merge)
-import Zora.Types
-import qualified Zora.TreeGraphing as G
+import qualified Zora.Graphing.DAGGraphing as G
 
 import Control.Applicative hiding (empty, (<*))
 
@@ -55,10 +54,6 @@ instance Functor SHeap where
   fmap f Empty = Empty
   fmap f (Node l e r) = Node (fmap f l) (f e) (fmap f r)
 
-instance Foldable SHeap where
-	foldMap :: (Monoid m) => (a -> m) -> SHeap a -> m
-	foldMap f = zoldMap (f . value)
-
 instance (Ord a) => Monoid (SHeap a) where
 	mempty :: SHeap a
 	mempty = Empty
@@ -75,29 +70,16 @@ instance (Eq a) => Eq (SHeap a) where
 		, l == l'
 		, r == r' ]
 
-instance (Ord a) => Ord (SHeap a) where
-	Empty `compare` Empty = EQ
-	_     `compare` Empty = GT
-	Empty `compare` _     = LT
-	(Node _ e _) `compare` (Node _ e' _) = e `compare` e'
+instance Foldable SHeap where
+	foldMap :: (Monoid m) => (a -> m) -> SHeap a -> m
+	foldMap _ Empty = mempty
+	foldMap f (Node l e r) =
+		(f e) `mappend` (mconcat . map (foldMap f) $ [l, r])
 
-
-instance Zoldable SHeap where
-	zoldMap :: (Monoid m) => (SHeap a -> m) -> SHeap a -> m
-	zoldMap = G.zoldMap
-
-instance G.TreeGraphable SHeap where
-	value :: SHeap a -> a
-	value Empty = error "Empty nodes have no get_value"
-	value (Node _ e _) = e
-
-	get_children :: SHeap a -> [SHeap a]
-	get_children Empty = []
-	get_children (Node l _ r) = [l, r]
-
-	is_empty :: SHeap a -> Bool
-	is_empty Empty = True
-	is_empty _ = False
+instance (Show a) => G.DAGGraphable (SHeap a) where
+	expand :: SHeap a -> Maybe (Maybe String, [(Maybe String, SHeap a)])
+	expand Empty = Nothing
+	expand (Node l e r) = Just (Just (show e), [(Nothing, l), (Nothing, r)])
 
 fromList :: (Ord a) => [a] -> SHeap a
 fromList = L.foldl' insert empty
@@ -309,7 +291,7 @@ test_sheap elements = and
 		dequeue_min_works h =
 			is_sorted
 			. (\l -> if l == [] then [] else tail l) 
-			. map fst
+			. map snd
 			. takeWhile (not . is_empty . fst)
 			. iterate (dequeue_min . fst)
 			$ (h, undefined)
