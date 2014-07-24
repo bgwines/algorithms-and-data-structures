@@ -1,7 +1,7 @@
 functional-data-structures
 ==========================
 
-Data structure implementations in functional languages (predominantly Haskell), mostly following *Purely Functional Data Structures*, by Chris Okasaki.
+Data structure implementations in functional languages (predominantly Haskell), with some data structures following *Purely Functional Data Structures*, by Chris Okasaki.
 
 Dependencies
 ------------
@@ -9,7 +9,7 @@ Dependencies
 - [Haskell](http://www.haskell.org/haskellwiki/Haskell)
 - [GraphViz](http://graphviz.org/) (`brew install graphviz`)
 - [Haskell GraphViz](https://hackage.haskell.org/package/graphviz) (`cabal install graphviz`)
-- [Zora](https://hackage.haskell.org/package/Zora-1.1.9) (`cabal install zora`)
+- [Zora](https://hackage.haskell.org/package/Zora) (`cabal install zora`)
 
 Leftist heaps
 ------------
@@ -35,10 +35,18 @@ We represent the digit `2` at position `i` in our sparse representation as the c
 
 List operations (`cons`, `head`, and `tail`) run in constant time, whereas array operations (`set` and `at`) run in logarithmic time (more specifically, `min(i, log n)`, where `i` is the index in question).
 
-Trie
-----
+Tries
+-----
 A trie is a tree that stores strings in a manner that overlaps all common prefixes.
 
-Transitive trie
+Transitive tries
+----------------
+A trie with transitive edges. Makes noncontiguous matching very straightforward, but is highly dependent on the amount of overlap between strings in the corpus.
+
+Cartesian trees
 ---------------
-A trie with transitive edges. Noncontiguous matching can be very slow in the worst case.
+A cartesian tree is a heap-ordered tree that reperesents a list where in-order traversal produces the original list.
+
+Fused cartesian trees
+---------------------
+A fused cartesian tree is a cartesian tree where if a node has the same value as its parent, the two are fused together.
