@@ -18,9 +18,9 @@
 using namespace std;
 
 /* A dynamic range tree is a data structure that supports two main operations:
- * querying the difference of the maximum and minimum values in the a contiguous
- * range, and incrementing all values in a contiguous range. This tree supports
- * those operations, but operates not on an array, but a B-tree. Updates and
+ * querying the maximum or minimum values in the a contiguous range, and
+ * incrementing all values in a contiguous range. This tree supports those
+ * operations, but operates not on an array, but a B-tree. Updates and
  * queries are performed not on ranges, but on subtrees.
  */
 class DynamicRangeTree {
@@ -57,15 +57,22 @@ public:
         root = construct_tree(make_pair(lb, ub));
     }
     
-    /* O(log n) The difference of the maximum and minimum values
-     * in the sub-tree rooted at the b-tree node with the given
-     * uid.
+    /* O(log n) The maximum value in the the sub-tree rooted at
+     * the b-tree node with the given uid.
      */
-    int inequity(int root_uid) {
+    int max_in_subtree(int root_uid) {
         SpanningInfo subtrees = subtrees_for_btree_subtree(root_uid);
-        return max_in_range(subtrees) - min_in_range(subtrees);
+        return max_in_range(subtrees);
     }
-    
+
+    /* O(log n) The minimum value in the the sub-tree rooted at
+     * the b-tree node with the given uid.
+     */
+    int min_in_subtree(int root_uid) {
+        SpanningInfo subtrees = subtrees_for_btree_subtree(root_uid);
+        return min_in_range(subtrees);
+    }
+
     /* O(log n) Updates every node in the sub-tree rooted at the b-tree
      * node with the given uid to have its value incremented by the
      * given amount. */
@@ -346,8 +353,8 @@ private:
      */
     bool is_leaf_node(RangeTreeNode* node) {
         return (node != NULL) // NULL is not a leaf node
-        && (node->l == NULL)
-        && (node->r == NULL);
+            && (node->l == NULL)
+            && (node->r == NULL);
     }
     
     /* O(log n) Finds the DynamicRangeTree subtrees who make up the B-tree
